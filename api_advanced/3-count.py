@@ -1,48 +1,60 @@
 #!/usr/bin/python3
-
+""""Doc"""
 import requests
-import re
 
-def count_words(subreddit, word_list, after=None, word_count={}):
-    """Recursive function that queries the Reddit API, parses the title of all hot articles, 
-    and prints a sorted count of given keywords"""
 
-    # URL for the subreddit's hot posts in JSON format
-    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
-    # User agent header to prevent 429 (Too Many Requests) errors
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    # Parameters for the request (limit of 100 posts per page, and "after" parameter to get the next page of posts)
-    params = {'limit': '100', 'after': after}
-    
-    # Make the request to the API
-    response = requests.get(url, headers=headers, params=params, allow_redirects=False)
-    # Check if the subreddit is invalid (status code other than 200)
-    if response.status_code != 200:
-        print(f"Invalid subreddit: {subreddit}")
+def count_words(subreddit, word_list, after="", words_count={}):
+    """"Doc"""
+    url = "https://www.reddit.com/r/{}/hot.json?limit=100" \
+        .format(subreddit)
+    header = {'User-Agent': 'Mozilla/5.0'}
+    param = {'after': after}
+    res = requests.get(url, headers=header, params=param)
+
+    if res.status_code != 200:
         return
-    
-    # Parse the response JSON data
-    data = response.json()
-    # Extract the posts from the data
-    posts = data['data']['children']
-    
-    # Loop through each post's title and each word in the word_list
-    for post in posts:
-        title = post['data']['title'].lower()
-        for word in word_list:
-            # Use regular expressions to match whole words only
-            if word.lower() in re.findall(r'\b\w+\b', title):
-                # Increment the count of the word in the word_count dictionary
-                word_count[word.lower()] = word_count.get(word.lower(), 0) + 1
-    
-    # Check if there are no more posts to get
-    if not data['data']['after']:
-        # Sort the word_count dictionary by count (descending) and then by word (ascending)
-        sorted_words = sorted(word_count.items(), key=lambda x: (-x[1], x[0]))
-        # Print the sorted word count
-        for word, count in sorted_words:
-            print(f"{word}: {count}")
-        return
-    
-    # Call the function again with the "after" parameter set to the next page of posts
-    return count_words(subreddit, word_list, after=data['data']['after'], word_count=word_count)
+
+    json_res = res.json()  # chch
+    after = json_res.get('data').get('after')
+    has_next = after is not None
+    hot_titles = []
+    words = [word.lower() for word in word_list]
+
+    if len(words_count) == 0:
+        words_count = {word: 0 for word in words}
+    # print(words_count)
+    hot_articles = json_res.get('data').get('children')
+    [hot_titles.append(article.get('data').get('title'))
+     for article in hot_articles]
+
+    # loop through all titles
+    for i in range(len(hot_titles)):
+        # make the title as a list of word
+        # title_words = hot_titles[i].lower().split()
+        for title_word in hot_titles[i].lower().split():
+            for word in words:
+                if word.lower() == title_word:
+                    words_count[word] = words_count.get(word) + 1
+                # else:
+                #     # pass
+                #     print(word.lower() + " != " + title_word)
+
+    if has_next:
+        # print(after + "\t" + str(has_next))
+        return count_words(subreddit, word_list, after, words_count)
+    else:
+
+        words_count = dict(filter(lambda item: item[1] != 0,
+                                  words_count.items()))
+        # their python version is not making people’s life easier
+        # words_count = {key: value for key, value in
+        #                sorted(words_count.items(),
+        #                       key=lambda item: item[1], reverse=True)}
+
+        words_count = sorted(words_count.items(),
+                             key=lambda item: item[1],
+                             reverse=True)
+
+        for i in range(len(words_count)):
+            print("{}: {}".format(words_count[i][0],
+                                  words_count[i][1]))
